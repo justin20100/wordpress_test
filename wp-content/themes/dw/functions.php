@@ -3,6 +3,15 @@
 // Charger les fichiers nécessaires
 require_once(__DIR__ . '/Menus/PrimaryMenuWalker.php');
 require_once(__DIR__ . '/Menus/PrimaryMenuItem.php');
+require_once(__DIR__ . '/Forms/BaseFormController.php');
+require_once(__DIR__ . '/Forms/ContactFormController.php');
+require_once(__DIR__ . '/Forms/Sanitizers/BaseSanitizer.php');
+require_once(__DIR__ . '/Forms/Sanitizers/TextSanitizer.php');
+require_once(__DIR__ . '/Forms/Sanitizers/EmailSanitizer.php');
+require_once(__DIR__ . '/Forms/Validators/BaseValidator.php');
+require_once(__DIR__ . '/Forms/Validators/RequiredValidator.php');
+require_once(__DIR__ . '/Forms/Validators/EmailValidator.php');
+require_once(__DIR__ . '/Forms/Validators/AcceptedValidator.php');
 
 // Lancer la sessions PHP pour pouvoir passer des variables de page en page
 add_action('init', 'dw_start_session', 1);
@@ -124,88 +133,8 @@ add_action('admin_post_submit_contact_form', 'dw_handle_submit_contact_form');
 
 function dw_handle_submit_contact_form()
 {
-    $nonce = $_POST['_wpnonce'];
-
-    if(! wp_verify_nonce($nonce, 'nonce_submit_contact')) {
-        die('Unauthorized.');
-    }
-
-    $data = dw_sanitize_contact_form_data();
-
-    if($errors = dw_validate_contact_form_data($data)) {
-        // C'est pas OK, on place les erreurs de validation dans la session
-        $_SESSION['contact_form_feedback'] = [
-            'success' => false,
-            'data' => $data,
-            'errors' => $errors,
-        ];
-
-        // On redirige l'utilisateur vers le formulaire pour y afficher le feedback d'erreurs.
-        return wp_safe_redirect($_POST['_wp_http_referer'] . '#contact', 302);
-    }
-
-    // C'est OK.
-
-    $id = wp_insert_post([
-        'post_title' => 'Message de ' . $data['firstname'] . ' ' . $data['lastname'],
-        'post_type' => 'message',
-        'post_content' => $data['message'],
-        'post_status' => 'publish'
-    ]);
-
-    // Générer un email contenant l'URL vers le post en question
-    $feedback = 'Bonjour, Vous avez un nouveau message.<br />';
-    $feedback .= 'Y accéder : ' . get_edit_post_link($id);
-
-    // Envoyer l'email à l'admin
-    wp_mail(get_bloginfo('admin_email'), 'Nouveau message !', $feedback);
-
-    // Ajouter le feedback positif à la session
-    $_SESSION['contact_form_feedback'] = [
-        'success' => true,
-    ];
-
-    return wp_safe_redirect($_POST['_wp_http_referer'] . '#contact', 302);
-}
-
-function dw_sanitize_contact_form_data()
-{
-    return [
-        'firstname' => sanitize_text_field($_POST['firstname']),
-        'lastname' => sanitize_text_field($_POST['lastname']),
-        'email' => sanitize_email($_POST['email']),
-        'phone' => sanitize_text_field($_POST['phone']),
-        'message' => sanitize_text_field($_POST['message'] ?? ''),
-        'rules' => sanitize_text_field($_POST['rules'] ?? ''),
-    ];
-}
-
-function dw_validate_contact_form_data($data)
-{
-    $errors = [];
-
-    $required = ['firstname','lastname','email','message'];
-    $email = ['email'];
-    $accepted = ['rules'];
-
-    foreach($data as $key => $value) {
-        if(in_array($key, $required) && ! $value) {
-            $errors[$key] = 'required';
-            continue;
-        }
-
-        if(in_array($key, $email) && ! filter_var($value, FILTER_VALIDATE_EMAIL)) {
-            $errors[$key] = 'email';
-            continue;
-        }
-
-        if(in_array($key, $accepted) && $value !== '1') {
-            $errors[$key] = 'accepted';
-            continue;
-        }
-    }
-
-    return $errors ?: false;
+    // Instancier le controlleur du form
+    $form = new ContactFormController($_POST);
 }
 
 function dw_get_contact_field_value($field)
